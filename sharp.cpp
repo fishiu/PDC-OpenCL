@@ -10,12 +10,13 @@
 #include <fstream>
 #include <iostream>
 #include <sstream>
+#include <chrono>
 
 #include "sharp.hpp"
 
-const int mem_num = 3;
+const int mem_num = 2;
 
-const int width = 16;
+const int width = 100;
 const int total_num = width * width;
 // const int fil_size = 3;  // filter size
 const int overlap = fil_size - 1;
@@ -102,8 +103,6 @@ bool CreateMemObjects(cl_context context, cl_mem memObjects[mem_num]) {
   memObjects[0] = clCreateBuffer(context, CL_MEM_READ_WRITE, sizeof(int) * total_num, NULL, NULL);
   // data_out
   memObjects[1] = clCreateBuffer(context, CL_MEM_READ_WRITE, sizeof(int) * total_num_out, NULL, NULL);
-  // log
-  memObjects[2] = clCreateBuffer(context, CL_MEM_READ_WRITE, sizeof(int) * total_num, NULL, NULL);
   return true;
 }
 
@@ -125,6 +124,8 @@ int main(int argc, char **argv) {
 
   print_basic_info();
 
+  auto start_gpu = std::chrono::steady_clock::now();
+
   cl_context context = 0;
   cl_command_queue commandQueue = 0;
   cl_program program = 0;
@@ -141,17 +142,15 @@ int main(int argc, char **argv) {
 
   int img_in[total_num];
   int img_out[total_num];
-  int log[total_num];
   // const int filter[fil_size][fil_size] = {1, 1, 1, 1, -9, 1, 1, 1, 1};
 
   for (int i = 0; i < total_num; i++) {
     img_in[i] = rand() % 256;
-    log[i] = 0;
     if (i < total_num_out)
       img_out[i] = -1;
   }
 
-  print_array(img_in, total_num, "img_in");
+  // print_array(img_in, total_num, "img_in");
 
   if (!CreateMemObjects(context, memObjects)) {
     Cleanup(context, commandQueue, program, kernel_conv, memObjects);
@@ -166,18 +165,21 @@ int main(int argc, char **argv) {
     printf("set arg error\n");
     std::cerr << getErrorString(errNum) << std::endl;
     return errNum;
+  } else {
+    printf("set arg 0 success\n");
   }
   errNum |= clSetKernelArg(kernel_conv, 1, sizeof(cl_mem), &memObjects[1]);   // img_out
   errNum |= clSetKernelArg(kernel_conv, 2, sizeof(int), (void *)&width);      // img width
   errNum |= clSetKernelArg(kernel_conv, 3, sizeof(int), (void *)&out_width);  // img_out width
   errNum |= clSetKernelArg(kernel_conv, 4, sizeof(int), (void *)&item_size);  // item_size
   // errNum |= clSetKernelArg(kernel_conv, 5, sizeof(int), (void *)filter);     // filter kernel
-  errNum |= clSetKernelArg(kernel_conv, 5, sizeof(cl_mem), &memObjects[2]);     // filter kernel
 
   if(errNum != CL_SUCCESS) {
     printf("set arg error\n");
     std::cerr << getErrorString(errNum) << std::endl;
     return errNum;
+  } else {
+    printf("set arg success\n");
   }
 
   cl_uint work_dim = 2;
@@ -186,16 +188,12 @@ int main(int argc, char **argv) {
 
   // init cl memory
   errNum = clEnqueueWriteBuffer(commandQueue, memObjects[0], CL_TRUE, 0, sizeof(int) * total_num, img_in, 0, NULL, NULL);
-  if(errNum != CL_SUCCESS) {
+    if(errNum != CL_SUCCESS) {
     printf("init memory error\n");
     std::cerr << getErrorString(errNum) << std::endl;
     return errNum;
-  }
-  errNum = clEnqueueWriteBuffer(commandQueue, memObjects[2], CL_TRUE, 0, sizeof(int) * total_num, log, 0, NULL, NULL);
-  if(errNum != CL_SUCCESS) {
-    printf("init memory error\n");
-    std::cerr << getErrorString(errNum) << std::endl;
-    return errNum;
+  } else {
+    printf("init memory success\n");
   }
   
   // execute kernel: compute histogram
@@ -205,35 +203,30 @@ int main(int argc, char **argv) {
     printf("exe error\n");
     std::cerr << getErrorString(errNum) << std::endl;
     return errNum;
+  } else {
+    printf("kernel_conv done\n");
   }
-  printf("kernel_conv done\n");
 
   // read cl memory
   errNum = clEnqueueReadBuffer(commandQueue, memObjects[1], CL_TRUE, 0, sizeof(int) * total_num_out, img_out, 0, NULL, NULL);
-  if(errNum != CL_SUCCESS) {
-    std::cerr << getErrorString(errNum) << std::endl;
-    return errNum;
-  }
-  errNum = clEnqueueReadBuffer(commandQueue, memObjects[2], CL_TRUE, 0, sizeof(int) * total_num, log, 0, NULL, NULL);
-  if(errNum != CL_SUCCESS) {
-    std::cerr << getErrorString(errNum) << std::endl;
-    return errNum;
-  }
+  // print_array(img_out, total_num_out, "img_out");
+  Cleanup(context, commandQueue, program, kernel_conv, memObjects);
 
-  print_array(log, total_num, "log");
-  print_array(img_out, total_num_out, "img_out");
+  std::cout << "gpu(ms)=" << since(start_gpu).count() << std::endl;
 
+
+  auto start_cpu = std::chrono::steady_clock::now();
   // STEP 2: compare with cpu result
   int cpu_out[total_num_out] = {0};
   cpu_sharp(img_in, cpu_out, width, out_width);
-  print_array(cpu_out, total_num_out, "cpu_out");
+  // print_array(cpu_out, total_num_out, "cpu_out");
 
   if(compare(cpu_out, img_out, total_num_out)) {
     printf("\ncompare with cpu result success\n");
   } else {
     printf("\ncompare with cpu result failed\n");
   }
+  std::cout << "cpu(ms)=" << since(start_cpu).count() << std::endl;
 
-  Cleanup(context, commandQueue, program, kernel_conv, memObjects);
   return 0;
 }

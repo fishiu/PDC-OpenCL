@@ -1,5 +1,6 @@
 #include <CL/cl.h>
 
+#include <chrono>
 #include <cstdio>
 
 typedef float img_t;
@@ -36,6 +37,16 @@ void print_array(int* array, int size, const char* name) {
     if (i % gap == gap - 1) printf("\n");
   }
   printf("\n");
+}
+
+template <
+    class result_t   = std::chrono::milliseconds,
+    class clock_t    = std::chrono::steady_clock,
+    class duration_t = std::chrono::milliseconds
+>
+auto since(std::chrono::time_point<clock_t, duration_t> const& start)
+{
+    return std::chrono::duration_cast<result_t>(clock_t::now() - start);
 }
 
 const char* getErrorString(cl_int error) {
