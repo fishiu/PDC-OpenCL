@@ -129,7 +129,7 @@ int main(int argc, char **argv) {
   cl_program program = 0;
   cl_device_id device = 0;
   cl_kernel kernel_gethist = 0, kernel_histimg = 0;
-  cl_mem memObjects[4] = {0, 0, 0, 0};
+  cl_mem memObjects[mem_num] = {0, 0, 0, 0};
   cl_int errNum;
 
   const char *filename = "hist.cl";
