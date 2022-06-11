@@ -15,8 +15,8 @@
 const int hist_size = 256;
 const int mem_num = 4;
 
-const int width = 8;
-const int height = 8;
+const int width = 768;
+const int height = 768;
 const int total_num = width * height;
 const int item_size = 4;  // how many data point a work item need to handle
 const int global_work_item_size = total_num / item_size;
@@ -124,21 +124,6 @@ void Cleanup(cl_context context, cl_command_queue commandQueue, cl_program progr
 int main(int argc, char **argv) {
   srand((unsigned)1107);
 
-  cl_context context = 0;
-  cl_command_queue commandQueue = 0;
-  cl_program program = 0;
-  cl_device_id device = 0;
-  cl_kernel kernel_gethist = 0, kernel_histimg = 0;
-  cl_mem memObjects[mem_num] = {0, 0, 0, 0};
-  cl_int errNum;
-
-  const char *filename = "hist.cl";
-  context = CreateContext();
-  commandQueue = CreateCommandQueue(context, &device);
-  program = CreateProgram(context, device, filename);
-  kernel_gethist = clCreateKernel(program, "img_to_hist", NULL);
-  kernel_histimg = clCreateKernel(program, "eq_img", NULL);
-
   int img[total_num];
   int imgeq[total_num];
   // int log[total_num];
@@ -155,6 +140,23 @@ int main(int argc, char **argv) {
     hist[i] = 0;
     histeq[i] = 0;
   }
+
+  auto start_gpu = std::chrono::steady_clock::now();
+
+  cl_context context = 0;
+  cl_command_queue commandQueue = 0;
+  cl_program program = 0;
+  cl_device_id device = 0;
+  cl_kernel kernel_gethist = 0, kernel_histimg = 0;
+  cl_mem memObjects[mem_num] = {0, 0, 0, 0};
+  cl_int errNum;
+
+  const char *filename = "hist.cl";
+  context = CreateContext();
+  commandQueue = CreateCommandQueue(context, &device);
+  program = CreateProgram(context, device, filename);
+  kernel_gethist = clCreateKernel(program, "img_to_hist", NULL);
+  kernel_histimg = clCreateKernel(program, "eq_img", NULL);
 
   if (!CreateMemObjects(context, memObjects)) {
     Cleanup(context, commandQueue, program, kernel_gethist, kernel_histimg, memObjects);
@@ -219,6 +221,11 @@ int main(int argc, char **argv) {
   // print_array(log, total_num, "log");
   // print_array(imgeq, total_num, "imgeq");
 
+  Cleanup(context, commandQueue, program, kernel_gethist, kernel_histimg, memObjects);
+  std::cout << "gpu(ms)=" << since(start_gpu).count() << std::endl;
+
+
+  auto start_cpu = std::chrono::steady_clock::now();
   // STEP 4: compare with cpu result
   int cpu_imgeq[total_num] = {0};
   cpu_histeq(img, cpu_imgeq, total_num);
@@ -229,7 +236,7 @@ int main(int argc, char **argv) {
   } else {
     printf("\ncompare with cpu result failed\n");
   }
+  std::cout << "cpu(ms)=" << since(start_cpu).count() << std::endl;
 
-  Cleanup(context, commandQueue, program, kernel_gethist, kernel_histimg, memObjects);
   return 0;
 }

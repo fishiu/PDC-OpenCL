@@ -1,4 +1,5 @@
 #include <cstdio>
+#include <chrono>
 
 void get_histeq(int* hist, int* histeq, int total_num, bool printinfo=false) {
   float pdf[256] = {};
@@ -51,4 +52,14 @@ void print_array(int* array, int size, const char* name) {
     printf("%d\t", array[i]);
   }
   printf("\n");
+}
+
+template <
+    class result_t   = std::chrono::milliseconds,
+    class clock_t    = std::chrono::steady_clock,
+    class duration_t = std::chrono::milliseconds
+>
+auto since(std::chrono::time_point<clock_t, duration_t> const& start)
+{
+    return std::chrono::duration_cast<result_t>(clock_t::now() - start);
 }
