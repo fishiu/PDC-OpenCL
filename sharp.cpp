@@ -1,19 +1,19 @@
 #include "sharp.hpp"
 
 const int mem_num = 3;
-
-const int width = 4096;
-const int total_num = width * width;
+const int width = 2048;
+const int local_work_item_size = 4;
 // const int fil_size = 3;  // filter size
+
+const int total_num = width * width;
 const int overlap = fil_size - 1;
 const int out_width = width - overlap;
 const int total_num_out = out_width * out_width;
-const int item_size = 32;                                               // how many data point a work item need to handle
-const int global_work_item_size = ceil((float)out_width / item_size);  // 2D
-const int local_work_item_size = 4;
+
+const int global_work_item_size = width;
 
 int img_in[total_num] = {0};
-int img_out[total_num] = {0};
+int img_out[total_num_out] = {0};
 int cpu_out[total_num_out] = {0};
 
 void print_basic_info() {
@@ -21,7 +21,6 @@ void print_basic_info() {
   printf("width: %d\n", width);
   printf("total_num: %d\n", total_num);
   printf("total_num_out: %d\n", total_num_out);
-  printf("item_size: %d\n", item_size);
   printf("global_work_item_size: %d\n", global_work_item_size);
   printf("local_work_item_size: %d\n", local_work_item_size);
 }
@@ -146,11 +145,9 @@ int main(int argc, char **argv) {
   // ================================================================================================
   errNum = clSetKernelArg(kernel_conv, 0, sizeof(cl_mem), &cl_img_in);        // img_in
   errNum |= clSetKernelArg(kernel_conv, 1, sizeof(cl_mem), &cl_img_out);      // img_out
-  errNum |= clSetKernelArg(kernel_conv, 2, sizeof(int), (void *)&width);      // img width
-  errNum |= clSetKernelArg(kernel_conv, 3, sizeof(int), (void *)&out_width);  // img_out width
-  errNum |= clSetKernelArg(kernel_conv, 4, sizeof(int), (void *)&item_size);  // item_size
-  errNum |= clSetKernelArg(kernel_conv, 5, sizeof(cl_mem), &cl_filter);          // filter kernel
-  errNum |= clSetKernelArg(kernel_conv, 6, sizeof(int), (void *)&fil_size);   // filter size
+  errNum |= clSetKernelArg(kernel_conv, 2, sizeof(int), (void *)&out_width);  // img_out width
+  errNum |= clSetKernelArg(kernel_conv, 3, sizeof(cl_mem), &cl_filter);       // filter kernel
+  errNum |= clSetKernelArg(kernel_conv, 4, sizeof(int), (void *)&fil_size);   // filter size
 
   if (errNum != CL_SUCCESS) {
     printf("set arg error\n");
