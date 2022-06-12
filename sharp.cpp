@@ -1,8 +1,8 @@
 #include "sharp.hpp"
 
 const int mem_num = 3;
-const int width = 2048;
-const int local_work_item_size = 8;
+const int width = 4096;
+const int local_work_item_size = 32;
 // const int fil_size = 3;  // filter size
 
 const int total_num = width * width;

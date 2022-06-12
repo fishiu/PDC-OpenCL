@@ -142,12 +142,64 @@ __kernel void conv(__global int *data_in, __global int *data_out, int in_width,
 
 #### 优化2：展开滤波器循环
 
+GPU是厌恶循环的（相比CPU），因此考虑把循环展开，部分代码
+
 
 #### 优化3：使用local memory
 
 根据经验，工作组大小也是非常重要的因素，因此考虑对工作组大小参数进行探索，首先要做的肯定是建立local memory，否则工作项数量对性能应该影响不大。但是由于我之前的设置就是每个工作项计算多个像素点，在这样的基础上，local memory的初始化等工作变得非常冗长，因此决定推倒重来：改为每个工作项只计算一个像素。
 
 
+```opencl
+__kernel void conv(const __global int *imgin, __global int *imgout,
+                   const int outw, __constant int *filter, const int fil_size,
+                   __local int *local_img) {
+  const int inw = get_global_size(0);
+  const int gid_x = get_global_id(0);
+  const int gid_y = get_global_id(1);
+
+  const int local_size = get_local_size(0);  // local work item size
+  const int overlap = inw - outw;
+  const int inw_l = local_size + overlap; // plus overlap
+  const int lid_x = get_local_id(0);
+  const int lid_y = get_local_id(1);
+  // initialize local memory and sync
+  if (lid_x == 0 && lid_y == 0)
+    for (int i = 0; i < inw_l; ++i)
+      for (int j = 0; j < inw_l; ++j) {
+        if ((gid_x + i) >= inw || (gid_y + j) >= inw) continue;
+        local_img[i * inw_l + j] = imgin[(gid_x + i) * inw + (gid_y + j)];
+      }
+  barrier(CLK_LOCAL_MEM_FENCE);
+
+  // do not need to compute here
+  if (gid_x >= outw || gid_y >= outw)
+    return;
+
+  int sum = 0;
+  // unrole loop
+  sum += local_img[lid_x * inw_l + lid_y] * filter[0];
+  sum += local_img[lid_x * inw_l + lid_y + 1] * filter[1];
+  sum += local_img[lid_x * inw_l + lid_y + 2] * filter[2];
+  sum += local_img[(lid_x + 1) * inw_l + lid_y] * filter[fil_size];
+  sum += local_img[(lid_x + 1) * inw_l + lid_y + 1] * filter[fil_size + 1];
+  sum += local_img[(lid_x + 1) * inw_l + lid_y + 2] * filter[fil_size + 2];
+  sum += local_img[(lid_x + 2) * inw_l + lid_y] * filter[2 * fil_size];
+  sum += local_img[(lid_x + 2) * inw_l + lid_y + 1] * filter[2 * fil_size + 1];
+  sum += local_img[(lid_x + 2) * inw_l + lid_y + 2] * filter[2 * fil_size + 2];
+  imgout[gid_x * outw + gid_y] = sum;
+}
+```
+
+使用该kernel的实验结果如下，分别测试5种不同大小的图片尺寸，local item size设置为8，即每个维度的工作组大小为8，每个工作组总共同时计算8*8个像素点。
+
+| Picture width | OpenCL - Local memory (ms) | CPU (ms) |
+| ------------- | -------------------------- | -------- |
+| 256           | 263                        | 2        |
+| 512           | 266                        | 11       |
+| 1024          | 271                        | 44       |
+| 2048          | 323                        | 177      |
+| 4096          | 572                        | 704      |
 
 ### 4 实验结论
 
