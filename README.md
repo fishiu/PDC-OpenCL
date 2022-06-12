@@ -84,6 +84,14 @@ __kernel void eq_img(__global int *img, __global int *hist_eq) {
 
 固定随机种子为1107（我的生日），为每一个像素点随机生成一个[0, 256)范围内的像素值。使用cpu算法和gpu算法，核对结果准确性后比较使用的时间，同时测试不同图片尺寸的计算时间：
 
+| Picture width | OpenCL (ms)                | CPU (ms) |
+| ------------- | -------------------------- | -------- |
+| 512           | 241                        | 1        |
+| 1024          | 248                        | 7        |
+| 2048          | 272                        | 28       |
+| 4096          | 298                        | 110      |
+| 8192          | 458                        | 432      |
+
 ### 4 实验结论
 
 
@@ -139,7 +147,7 @@ __kernel void conv(const __global int *data_in, __global int *data_out,
 
 考虑到如果每个工作项都存储一个滤波器，开销会比较大，因此改为了使用constant内存进行存储filter（主要工作就是把filter作为一维数组输入kernel）。
 
-| Picture width | OpenCL - Local memory (ms) | CPU (ms) |
+| Picture width | OpenCL - constant filter (ms) | CPU (ms) |
 | ------------- | -------------------------- | -------- |
 | 256           | 249                        | 2        |
 | 512           | 254                        | 11       |
@@ -170,7 +178,7 @@ imgout[gid_x * outw + gid_y] = sum;
 
 展开循环后使用该kernel的实验结果如下表所示，实验所用的item size为8
 
-| Picture width | OpenCL - Local memory (ms) | CPU (ms) |
+| Picture width | OpenCL - flatten filter (ms) | CPU (ms) |
 | ------------- | -------------------------- | -------- |
 | 256           | 260                        | 2        |
 | 512           | 248                        | 11       |
@@ -184,8 +192,13 @@ imgout[gid_x * outw + gid_y] = sum;
 
 这个改进是简单的，结果如下所示：
 
-
-
+| Picture width | OpenCL - naive (ms) | CPU (ms) |
+| ------------- | -------------------------- | -------- |
+| 256           | 252                        | 2        |
+| 512           | 253                        | 11       |
+| 1024          | 270                        | 44       |
+| 2048          | 341                        | 177      |
+| 4096          | 579                        | 704      |
 
 进一步实现了local memory的kernel，代码改动较多，如下所示：
 
