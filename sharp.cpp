@@ -8,9 +8,9 @@ const int total_num = width * width;
 const int overlap = fil_size - 1;
 const int out_width = width - overlap;
 const int total_num_out = out_width * out_width;
-const int item_size = 4;                                               // how many data point a work item need to handle
+const int item_size = 32;                                               // how many data point a work item need to handle
 const int global_work_item_size = ceil((float)out_width / item_size);  // 2D
-const int local_work_item_size = 1;
+const int local_work_item_size = 4;
 
 int img_in[total_num] = {0};
 int img_out[total_num] = {0};

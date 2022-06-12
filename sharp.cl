@@ -13,12 +13,22 @@ __kernel void conv(const __global int *data_in, __global int *data_out,
       if (target_x >= out_width || target_y >= out_width)
         continue;
       int sum = 0;
-      for (int fi = 0; fi < fil_size; fi++) {
-        for (int fj = 0; fj < fil_size; fj++) {
-          int offset_2d = (target_x + fi) * in_width + target_y + fj;
-          sum += data_in[offset_2d] * filter[fi * fil_size + fj];
-        }
-      }
+      // for (int fi = 0; fi < fil_size; fi++) {
+      //   for (int fj = 0; fj < fil_size; fj++) {
+      //     int offset_2d = (target_x + fi) * in_width + target_y + fj;
+      //     sum += data_in[offset_2d] * filter[fi * fil_size + fj];
+      //   }
+      // }
+      // unrole loop
+      sum += data_in[(target_x + 0) * in_width + target_y + 0] * filter[0 * fil_size + 0];
+      sum += data_in[(target_x + 0) * in_width + target_y + 1] * filter[0 * fil_size + 1];
+      sum += data_in[(target_x + 0) * in_width + target_y + 2] * filter[0 * fil_size + 2];
+      sum += data_in[(target_x + 1) * in_width + target_y + 0] * filter[1 * fil_size + 0];
+      sum += data_in[(target_x + 1) * in_width + target_y + 1] * filter[1 * fil_size + 1];
+      sum += data_in[(target_x + 1) * in_width + target_y + 2] * filter[1 * fil_size + 2];
+      sum += data_in[(target_x + 2) * in_width + target_y + 0] * filter[2 * fil_size + 0];
+      sum += data_in[(target_x + 2) * in_width + target_y + 1] * filter[2 * fil_size + 1];
+      sum += data_in[(target_x + 2) * in_width + target_y + 2] * filter[2 * fil_size + 2];
       data_out[target_x * out_width + target_y] = sum;
     }
   }
