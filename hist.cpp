@@ -15,17 +15,22 @@
 const int hist_size = 256;
 const int mem_num = 4;
 
-const int width = 768;
-const int height = 768;
-const int total_num = width * height;
-const int item_size = 4;  // how many data point a work item need to handle
+const int width = 4096;
+const int total_num = width * width;
+const int item_size = 64;  // how many data point a work item need to handle
 const int global_work_item_size = total_num / item_size;
-const int local_work_item_size = 2;
+const int local_work_item_size = 8;
+
+// BIG ARRAYS
+int img[total_num];
+int imgeq[total_num];
+// int log[total_num];
+int cpu_imgeq[total_num] = {0};
+
 
 void print_basic_info() {
   printf("=====basic info=====\n");
   printf("width: %d\n", width);
-  printf("height: %d\n", height);
   printf("total_num: %d\n", total_num);
   printf("item_size: %d\n", item_size);
   printf("global_work_item_size: %d\n", global_work_item_size);
@@ -123,10 +128,6 @@ void Cleanup(cl_context context, cl_command_queue commandQueue, cl_program progr
 
 int main(int argc, char **argv) {
   srand((unsigned)1107);
-
-  int img[total_num];
-  int imgeq[total_num];
-  // int log[total_num];
   int hist[hist_size];
   int histeq[hist_size];
 
@@ -227,7 +228,6 @@ int main(int argc, char **argv) {
 
   auto start_cpu = std::chrono::steady_clock::now();
   // STEP 4: compare with cpu result
-  int cpu_imgeq[total_num] = {0};
   cpu_histeq(img, cpu_imgeq, total_num);
   // print_array(cpu_imgeq, total_num, "cpu_imgeq");
 

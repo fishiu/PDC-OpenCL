@@ -1,7 +1,15 @@
+#define CL_USE_DEPRECATED_OPENCL_1_2_APIS
+#include <stdio.h>
+#include <stdlib.h>
+#include <math.h>
 #include <CL/cl.h>
 
 #include <chrono>
-#include <cstdio>
+#include <fstream>
+#include <iostream>
+#include <sstream>
+#include <chrono>
+
 
 typedef float img_t;
 typedef float fil_t;
