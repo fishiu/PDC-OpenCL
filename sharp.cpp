@@ -2,7 +2,7 @@
 
 const int mem_num = 3;
 const int width = 2048;
-const int local_work_item_size = 4;
+const int local_work_item_size = 8;
 // const int fil_size = 3;  // filter size
 
 const int total_num = width * width;
@@ -148,6 +148,8 @@ int main(int argc, char **argv) {
   errNum |= clSetKernelArg(kernel_conv, 2, sizeof(int), (void *)&out_width);  // img_out width
   errNum |= clSetKernelArg(kernel_conv, 3, sizeof(cl_mem), &cl_filter);       // filter kernel
   errNum |= clSetKernelArg(kernel_conv, 4, sizeof(int), (void *)&fil_size);   // filter size
+  int local_mem_size = (local_work_item_size + overlap) * (local_work_item_size + overlap);
+  errNum |= clSetKernelArg(kernel_conv, 5, sizeof(int) * local_mem_size, 0);   // filter size
 
   if (errNum != CL_SUCCESS) {
     printf("set arg error\n");
