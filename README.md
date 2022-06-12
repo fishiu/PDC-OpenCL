@@ -97,15 +97,14 @@ __kernel void eq_img(__global int *img, __global int *hist_eq) {
 
 ### 2 实验设计
 
-卷积操作没有复杂的步骤，难点在于如何进行数据或者任务的划分，本实验中我从图片的两个维度对需要计算的任务矩阵进行划分，每一个工作项负责处理大小为`item_size`的矩阵任务目标，多个工作项共同完成`out_width * out_width`个任务。
+卷积操作没有复杂的步骤，难点在于如何进行数据或者任务的划分，本实验中我从图片的两个维度对需要计算的任务矩阵进行划分，每一个工作项负责处理大小为`item_size`的矩阵任务目标，多个工作项共同完成`out_width * out_width`个任务。（在最后的优化中，我改变了这个设定）。
 
-内存优化需要对输入的图片数据进行local或private，以及对滤波器参数进行优化。本实验由于时间精力问题没有对输入图片进行优化，因此我们只对滤波器参数进行优化，因此最初我使用一个private内存来存储滤波器参数，这样每一个工作项都可以快速滤波器内存，提高并行效率。
+内存优化需要对输入的图片数据进行local或private，以及对滤波器参数进行优化。首先只对滤波器参数进行优化，因此最初我使用一个private内存来存储滤波器参数，这样每一个工作项都可以快速滤波器内存，提高并行效率。但是后来考虑到在每一个工作项中可能会占据较大的开销，放入constant内存显然是更好的。
 
 ```opencl
-__kernel void conv(__global int *data_in, __global int *data_out, int in_width,
-                   int out_width, int item_size) {
-  const int fil_size = 3;
-  const int conv_kernel[3][3] = {{1, 1, 1}, {1, -9, 1}, {1, 1, 1}};
+__kernel void conv(const __global int *data_in, __global int *data_out,
+                   const int in_width, const int out_width, const int item_size,
+                   __constant int *filter, const int fil_size) {
   int gid_x = get_global_id(0);
   int gid_y = get_global_id(1);
   int offset_x = gid_x * item_size;
@@ -121,7 +120,7 @@ __kernel void conv(__global int *data_in, __global int *data_out, int in_width,
       for (int fi = 0; fi < fil_size; fi++) {
         for (int fj = 0; fj < fil_size; fj++) {
           int offset_2d = (target_x + fi) * in_width + target_y + fj;
-          sum += data_in[offset_2d] * conv_kernel[fi][fj];
+          sum += data_in[offset_2d] * filter[fi * fil_size + fj];
         }
       }
       data_out[target_x * out_width + target_y] = sum;
@@ -130,25 +129,65 @@ __kernel void conv(__global int *data_in, __global int *data_out, int in_width,
 }
 ```
 
-### 3 初步实验结果
+之后又实现了三个改进，具体内容见第4节。
 
-固定随机种子为1107（我的生日），为每一个像素点随机生成一个[0, 256)范围内的像素值。使用cpu算法和gpu算法，核对结果准确性后比较使用的时间，同时测试不同图片尺寸的计算时间：
+实验固定随机种子为1107（我的生日），为每一个像素点随机生成一个[0, 256)范围内的像素值。使用cpu算法和gpu算法，核对结果准确性后比较使用的时间，同时测试不同图片尺寸的计算时间。
 
-### 4 漫长的优化之旅
+### 3 优化和结果
 
 #### 优化1：constant filter
 
-考虑到如果每个工作项都存储一个滤波器，开销会比较大，因此改为了使用constant内存进行存储filter（代码略，主要工作就是把filter作为一维数组输入kernel）。
+考虑到如果每个工作项都存储一个滤波器，开销会比较大，因此改为了使用constant内存进行存储filter（主要工作就是把filter作为一维数组输入kernel）。
+
+| Picture width | OpenCL - Local memory (ms) | CPU (ms) |
+| ------------- | -------------------------- | -------- |
+| 256           | 249                        | 2        |
+| 512           | 254                        | 11       |
+| 1024          | 273                        | 44       |
+| 2048          | 326                        | 177      |
+| 4096          | 578                        | 704      |
+
+local item size=8
 
 #### 优化2：展开滤波器循环
 
-GPU是厌恶循环的（相比CPU），因此考虑把循环展开，部分代码
+GPU是厌恶循环的（相比CPU），因此考虑把循环展开，部分代码如下所示：
 
+```opencl
+int sum = 0;
+// unrole loop
+sum += local_img[lid_x * inw_l + lid_y] * filter[0];
+sum += local_img[lid_x * inw_l + lid_y + 1] * filter[1];
+sum += local_img[lid_x * inw_l + lid_y + 2] * filter[2];
+sum += local_img[(lid_x + 1) * inw_l + lid_y] * filter[fil_size];
+sum += local_img[(lid_x + 1) * inw_l + lid_y + 1] * filter[fil_size + 1];
+sum += local_img[(lid_x + 1) * inw_l + lid_y + 2] * filter[fil_size + 2];
+sum += local_img[(lid_x + 2) * inw_l + lid_y] * filter[2 * fil_size];
+sum += local_img[(lid_x + 2) * inw_l + lid_y + 1] * filter[2 * fil_size + 1];
+sum += local_img[(lid_x + 2) * inw_l + lid_y + 2] * filter[2 * fil_size + 2];
+imgout[gid_x * outw + gid_y] = sum;
+```
+
+展开循环后使用该kernel的实验结果如下表所示，实验所用的item size为8
+
+| Picture width | OpenCL - Local memory (ms) | CPU (ms) |
+| ------------- | -------------------------- | -------- |
+| 256           | 260                        | 2        |
+| 512           | 248                        | 11       |
+| 1024          | 268                        | 44       |
+| 2048          | 321                        | 177      |
+| 4096          | 588                        | 704      |
 
 #### 优化3：使用local memory
 
 根据经验，工作组大小也是非常重要的因素，因此考虑对工作组大小参数进行探索，首先要做的肯定是建立local memory，否则工作项数量对性能应该影响不大。但是由于我之前的设置就是每个工作项计算多个像素点，在这样的基础上，local memory的初始化等工作变得非常冗长，因此决定推倒重来：改为每个工作项只计算一个像素。
 
+这个改进是简单的，结果如下所示：
+
+
+
+
+进一步实现了local memory的kernel，代码改动较多，如下所示：
 
 ```opencl
 __kernel void conv(const __global int *imgin, __global int *imgout,
